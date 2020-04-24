@@ -163,10 +163,12 @@ all: $(BUILD)
 $(BUILD):
 	@[ -d $@ ] || mkdir -p $@
 	@$(MAKE) --no-print-directory -C $(BUILD) -f $(CURDIR)/Makefile
-	mkdir -p $(CURDIR)/dist/atmosphere/contents/4200000000000811/flags
-	touch $(CURDIR)/dist/atmosphere/contents/4200000000000811/flags/boot2.flag
-	cp bitmap-printer.nsp $(CURDIR)/dist/atmosphere/contents/4200000000000811/exefs.nsp
-	cd $(CURDIR)/dist; zip -r bitmap-printer.zip ./*; cd ../;
+	mkdir -p dist/atmosphere/exefs_patches/vi_patches
+	cp patches/* dist/atmosphere/exefs_patches/vi_patches/
+	mkdir -p dist/atmosphere/contents/4200000000000811/flags
+	touch dist/atmosphere/contents/4200000000000811/flags/boot2.flag
+	cp bitmap-printer.nsp dist/atmosphere/contents/4200000000000811/exefs.nsp
+	cd dist; zip -r bitmap-printer.zip ./*; cd ../;
 
 #---------------------------------------------------------------------------------
 clean:
