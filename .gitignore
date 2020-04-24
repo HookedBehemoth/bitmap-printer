@@ -1,0 +1,8 @@
+*.elf
+*.nso
+*.nsp
+*.npdm
+.vscode
+build
+dist
+*.zip
