@@ -2,6 +2,12 @@
 
 "Bitmap printer goes brrrrr"
 
+## What does this do?
+This system module captures the capture button event and instead of saving a compressed (jpeg) image on the sd card it stores an uncompressed RGB bitmap on the sd card.
+
+## Why does it need patches?
+The IPC calls I use are caps:sc 1201-1203 that check a flag for debug mode. The patch makes the function call always return true.
+
 (Should) work on HOS version 3.0.0-10.0.1.
 
 Included patches:
