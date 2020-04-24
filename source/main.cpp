@@ -228,7 +228,6 @@ void CaptureFunction(void *) {
     fsFsClose(&sdmc);
 }
 
-// Main program entrypoint
 int main(int argc, char *argv[]) {
     /* Quietly exit on unsupported versions. */
     if (!initialized)
@@ -236,6 +235,8 @@ int main(int argc, char *argv[]) {
 
     should_run = true;
     request_capture = false;
+
+    bool held = false;
 
     Thread capture_thread;
     R_ABORT_UNLESS(threadCreate(&capture_thread, CaptureFunction, nullptr, nullptr, 0x1000, 0x20, -2));
@@ -247,7 +248,10 @@ int main(int argc, char *argv[]) {
 
     while (true) {
         if (R_SUCCEEDED(eventWait(&event, UINT64_MAX))) {
-            request_capture = true;
+            held = !held;
+            if (held) {
+                request_capture = true;
+            }
             eventClear(&event);
         } else {
             /* Something went horribly wrong! */
