@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstring>
 #include <switch.h>
 
 extern "C" {
@@ -153,21 +154,29 @@ class ScopeGuard {
 
 Result Capture() {
     /* Get filesystem handle. */
-    FsFileSystem sdmc;
-    R_TRY(fsOpenSdCardFileSystem(&sdmc));
-    ScopeGuard fs_guard([&sdmc] { fsFsClose(&sdmc); });
+    FsFileSystem fs;
+    R_TRY(fsOpenImageDirectoryFileSystem(&fs, FsImageDirectoryId_Sd));
+    ScopeGuard fs_guard([&fs] { fsFsClose(&fs); });
+
+    /* Create bitmap directory. */
+    std::strcpy(path_buffer, "/Bitmaps/");
+    Result rc = fsFsCreateDirectory(&fs, path_buffer);
+
+    /* Path already exists. */
+    if (R_FAILED(rc) && rc != 0x402)
+        return rc;
 
     /* Make unique path. */
     u64 tick = armGetSystemTick();
-    std::snprintf(path_buffer, 0x20, "/%ld.bmp", tick);
+    std::snprintf(path_buffer, 0x20, "/Bitmaps/%ld.bmp", tick);
 
     /* Create file. */
-    R_TRY(fsFsCreateFile(&sdmc, path_buffer, FileSize, 0));
-    ScopeGuard rm_guard([&sdmc] { fsFsDeleteFile(&sdmc, path_buffer); });
+    R_TRY(fsFsCreateFile(&fs, path_buffer, FileSize, 0));
+    ScopeGuard rm_guard([&fs] { fsFsDeleteFile(&fs, path_buffer); });
 
     /* Open file. */
     FsFile file;
-    R_TRY(fsFsOpenFile(&sdmc, path_buffer, FsOpenMode_Write, &file));
+    R_TRY(fsFsOpenFile(&fs, path_buffer, FsOpenMode_Write, &file));
     ScopeGuard file_guard([&file] { fsFileClose(&file); });
 
     /* Write bitmap header. */
