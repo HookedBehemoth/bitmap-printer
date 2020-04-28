@@ -44,8 +44,6 @@ void __libnx_initheap(void) {
 bool initialized = false;
 
 void __attribute__((weak)) __appInit(void) {
-    svcSleepThread(5'000'000'000);
-
     R_ABORT_UNLESS(smInitialize());
     {
         R_ABORT_UNLESS(setsysInitialize());
