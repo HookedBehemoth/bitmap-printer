@@ -6,8 +6,7 @@ extern u32 __start__;
 
 u32 __nx_applet_type = AppletType_None;
 
-/* TODO: Reduce this to effectively 0 */
-#define INNER_HEAP_SIZE 0x4000
+#define INNER_HEAP_SIZE 0x0
 size_t nx_inner_heap_size = INNER_HEAP_SIZE;
 char nx_inner_heap[INNER_HEAP_SIZE];
 
@@ -44,7 +43,8 @@ void __libnx_initheap(void) {
 bool initialized = false;
 
 void __attribute__((weak)) __appInit(void) {
-    svcSleepThread(5'000'000'000);
+    if ((armGetSystemTick() / armGetSystemTickFreq()) < 10)
+        svcSleepThread(5'000'000'000);
 
     R_ABORT_UNLESS(smInitialize());
     {
@@ -56,7 +56,7 @@ void __attribute__((weak)) __appInit(void) {
             setsysExit();
         }
 
-        if (hosversionAtLeast(3,0,0)) {
+        if (hosversionAtLeast(3, 0, 0)) {
             R_ABORT_UNLESS(hidsysInitialize());
             R_ABORT_UNLESS(capsscInitialize());
             R_ABORT_UNLESS(fsInitialize());
@@ -103,7 +103,7 @@ constexpr const u32 InSize = InLineSize * Height;
 constexpr const u32 OutSize = OutLineSize * Height;
 constexpr const u32 FileSize = OutSize + 0x36;
 
-constexpr const u64 divider = 20;
+constexpr const u64 divider = 10;
 constexpr const u32 InBufferSize = InLineSize * divider;
 constexpr const u32 OutBufferSize = OutLineSize * divider;
 
@@ -129,9 +129,6 @@ constexpr const bmp_t bmp = {
 static u8 in_buffer[InBufferSize];
 static u8 out_buffer[OutBufferSize];
 
-bool should_run;
-bool request_capture;
-
 char path_buffer[FS_MAX_PATH];
 
 #include <functional>
@@ -147,85 +144,65 @@ class ScopeGuard {
     void Cancel() { m_f = nullptr; };
 };
 
-#define R_CONTINUE(res_expr)   \
+#define R_TRY(res_expr)        \
     ({                         \
         auto res = (res_expr); \
         if (R_FAILED(res))     \
-            continue;          \
+            return res;        \
     })
 
-void CaptureFunction(void *) {
+Result Capture() {
     /* Get filesystem handle. */
     FsFileSystem sdmc;
-    if (R_FAILED(fsOpenSdCardFileSystem(&sdmc))) {
-        should_run = false;
-        return;
-    }
+    R_TRY(fsOpenSdCardFileSystem(&sdmc));
+    ScopeGuard fs_guard([&sdmc] { fsFsClose(&sdmc); });
 
-    while (should_run) {
-        /* Sleep thread until prompted */
-        if (!request_capture) {
-            svcSleepThread(100'000'000);
-            continue;
-        }
+    /* Make unique path. */
+    u64 tick = armGetSystemTick();
+    std::snprintf(path_buffer, 0x20, "/%ld.bmp", tick);
 
-        ScopeGuard flag_guard([] { request_capture = false; });
+    /* Create file. */
+    R_TRY(fsFsCreateFile(&sdmc, path_buffer, FileSize, 0));
+    ScopeGuard rm_guard([&sdmc] { fsFsDeleteFile(&sdmc, path_buffer); });
 
-        /* Open read stream */
-        u64 size, width, height;
-        R_CONTINUE(capsscOpenRawScreenShotReadStream(&size, &width, &height, ViLayerStack_Default, 100'000'000));
-        ScopeGuard stream_guard([] { capsscCloseRawScreenShotReadStream(); });
+    /* Open file. */
+    FsFile file;
+    R_TRY(fsFsOpenFile(&sdmc, path_buffer, FsOpenMode_Write, &file));
+    ScopeGuard file_guard([&file] { fsFileClose(&file); });
 
-        /* Notify capture. */
-        /* TODO! */
-        /* ScopeGuard notify_guard([] { capsscNotifyTakingScreenShotFailed(); }) */
+    /* Write bitmap header. */
+    off_t offset = 0;
+    fsFileWrite(&file, 0, &bmp, 54, FsWriteOption_None);
+    offset += 54;
 
-        /* Make unique path. */
-        u64 tick = armGetSystemTick();
-        std::snprintf(path_buffer, 0x20, "/%ld.bmp", tick);
+    u64 written = 0;
+    for (int y = (Height / divider) - 1; y >= 0; y--) {
+        /* Read raw image data */
+        R_TRY(capsscReadRawScreenShotReadStream(&written, in_buffer, sizeof(in_buffer), y * sizeof(in_buffer)));
 
-        /* Create file. */
-        R_CONTINUE(fsFsCreateFile(&sdmc, path_buffer, FileSize, 0));
-        ScopeGuard rm_guard([&sdmc] { fsFsDeleteFile(&sdmc, path_buffer); });
+        /* Resample buffer bottom up. */
+        for (int div_y = (divider - 1); div_y >= 0; div_y--) {
+            u8 *out = out_buffer + (div_y * OutLineSize);
+            u8 *in = in_buffer + ((divider - div_y - 1) * InLineSize);
 
-        FsFile file;
-        R_CONTINUE(fsFsOpenFile(&sdmc, path_buffer, FsOpenMode_Write, &file));
-        ScopeGuard file_guard([&file] { fsFileClose(&file); });
-
-        off_t offset = 0;
-        fsFileWrite(&file, 0, &bmp, 54, FsWriteOption_None);
-        offset += 54;
-
-        u64 written = 0;
-        for (int y = (Height / divider) - 1; y >= 0; y--) {
-            /* Read raw image data */
-            R_CONTINUE(capsscReadRawScreenShotReadStream(&written, in_buffer, sizeof(in_buffer), y * sizeof(in_buffer)));
-
-            /* Resample buffer bottom up. */
-            for (int div_y = (divider - 1); div_y >= 0; div_y--) {
-                u8 *out = out_buffer + (div_y * OutLineSize);
-                u8 *in = in_buffer + ((divider - div_y - 1) * InLineSize);
-
-                /* RGBX to RGB bitmap */
-                for (u32 x = 0; x < Width; x++) {
-                    out[0] = in[2];
-                    out[1] = in[1];
-                    out[2] = in[0];
-                    in += 4;
-                    out += 3;
-                }
+            /* RGBX to RGB bitmap */
+            for (u32 x = 0; x < Width; x++) {
+                out[0] = in[2];
+                out[1] = in[1];
+                out[2] = in[0];
+                in += 4;
+                out += 3;
             }
-
-            /* Write to file. */
-            fsFileWrite(&file, offset, out_buffer, sizeof(out_buffer), FsWriteOption_None);
-            offset += sizeof(out_buffer);
         }
 
-        rm_guard.Cancel();
-        /* notify_guard.Cancel(); */
+        /* Write to file. */
+        R_TRY(fsFileWrite(&file, offset, out_buffer, sizeof(out_buffer), FsWriteOption_None));
+        offset += sizeof(out_buffer);
     }
-    /* Close filesystem. */
-    fsFsClose(&sdmc);
+
+    rm_guard.Cancel();
+
+    return 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -233,35 +210,48 @@ int main(int argc, char *argv[]) {
     if (!initialized)
         return 0;
 
-    should_run = true;
-    request_capture = false;
-
     bool held = false;
 
-    Thread capture_thread;
-    R_ABORT_UNLESS(threadCreate(&capture_thread, CaptureFunction, nullptr, nullptr, 0x1000, 0x20, -2));
-    R_ABORT_UNLESS(threadStart(&capture_thread));
+    u64 start_tick = 0;
 
+    /* Obtain capture button event. */
     Event event;
     R_ABORT_UNLESS(hidsysAcquireCaptureButtonEventHandle(&event));
     eventClear(&event);
 
+    /* Loop forever. */
     while (true) {
-        if (R_SUCCEEDED(eventWait(&event, UINT64_MAX))) {
-            held = !held;
-            if (held) {
-                request_capture = true;
-            }
+        if (R_SUCCEEDED(eventWait(&event, 17'000'000))) {
             eventClear(&event);
+            if (!held) {
+                /* Capture screen in VI. */
+                if (R_SUCCEEDED(capsscOpenRawScreenShotReadStream(nullptr, nullptr, nullptr, ViLayerStack_Default, 100'000'000))) {
+                    held = true;
+                    start_tick = armGetSystemTick();
+                }
+            } else if (start_tick != 0) {
+                /* Capture bitmap in file. */
+                Capture();
+                /* Discard capture. */
+                capsscCloseRawScreenShotReadStream();
+                start_tick = 0;
+                held = false;
+            } else {
+                held = false;
+            }
         } else {
-            /* Something went horribly wrong! */
-            break;
+            if (start_tick != 0) {
+                /* If held for more than half a second we discard the capture. */
+                if ((armGetSystemTick() - start_tick) >= (armGetSystemTickFreq() / 2)) {
+                    capsscCloseRawScreenShotReadStream();
+                    start_tick = 0;
+                }
+            }
         }
     }
-    eventClose(&event);
-    should_run = false;
 
-    R_ABORT_UNLESS(threadWaitForExit(&capture_thread));
-    R_ABORT_UNLESS(threadClose(&capture_thread));
+    /* Close button event. */
+    eventClose(&event);
+
     return 0;
 }
