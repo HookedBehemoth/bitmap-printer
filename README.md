@@ -8,7 +8,7 @@ This system module captures the capture button event and instead of saving a com
 ## Why does it need patches?
 The IPC calls I use are caps:sc 1201-1203 that check a flag for debug mode. The patch makes the function call always return true.
 
-(Should) work on HOS version 3.0.0-10.0.1.
+(Should) work on HOS version 3.0.0-10.0.2.
 
 Included patches:
 | vi Version | Patch name (Build ID + .ips) | tested |
