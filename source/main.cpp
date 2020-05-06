@@ -7,10 +7,6 @@ extern u32 __start__;
 
 u32 __nx_applet_type = AppletType_None;
 
-#define INNER_HEAP_SIZE 0x0
-size_t nx_inner_heap_size = INNER_HEAP_SIZE;
-char nx_inner_heap[INNER_HEAP_SIZE];
-
 void __libnx_initheap(void);
 void __appInit(void);
 void __appExit(void);
@@ -22,15 +18,11 @@ void __libnx_exception_handler(ThreadExceptionDump *ctx);
 }
 
 void __libnx_initheap(void) {
-    void *addr = nx_inner_heap;
-    size_t size = nx_inner_heap_size;
-
-    // Newlib
     extern char *fake_heap_start;
     extern char *fake_heap_end;
 
-    fake_heap_start = (char *)addr;
-    fake_heap_end = (char *)addr + size;
+    fake_heap_start = nullptr;
+    fake_heap_end = nullptr;
 }
 
 #define R_ABORT_UNLESS(res_expr)                 \
@@ -44,8 +36,8 @@ void __libnx_initheap(void) {
 bool initialized = false;
 
 void __attribute__((weak)) __appInit(void) {
-    if ((armGetSystemTick() / armGetSystemTickFreq()) < 10)
-        svcSleepThread(5'000'000'000);
+    while ((armGetSystemTick() / armGetSystemTickFreq()) < 10)
+        svcSleepThread(1'000'000'000);
 
     R_ABORT_UNLESS(smInitialize());
     {
