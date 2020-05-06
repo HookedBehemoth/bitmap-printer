@@ -220,7 +220,15 @@ Result Capture() {
     /* I don't care if any of this fails. */
     FsTimeStampRaw timestamp;
     if (R_SUCCEEDED(fsFsGetFileTimeStampRaw(&fs, path_buffer, &timestamp))) {
-        std::snprintf(b_path_buffer, FS_MAX_PATH, "/Bitmaps/%ld.bmp", timestamp.created);
+        time_t ts = timestamp.created;
+        tm *t = localtime(&ts);
+        std::snprintf(b_path_buffer, FS_MAX_PATH, "/Bitmaps/%d-%02d-%02d_%02d-%02d-%02d.bmp",
+                      t->tm_year + 1900,
+                      t->tm_mon + 1,
+                      t->tm_mday,
+                      t->tm_hour,
+                      t->tm_min,
+                      t->tm_sec);
         fsFsRenameFile(&fs, path_buffer, b_path_buffer);
     }
 
