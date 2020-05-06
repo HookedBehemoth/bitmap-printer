@@ -131,6 +131,7 @@ static u8 in_buffer[InBufferSize];
 static u8 out_buffer[OutBufferSize];
 
 char path_buffer[FS_MAX_PATH];
+char b_path_buffer[FS_MAX_PATH];
 
 #include <functional>
 class ScopeGuard {
@@ -139,10 +140,14 @@ class ScopeGuard {
   public:
     ScopeGuard(std::function<void()> f) : m_f(f) {}
     ~ScopeGuard() {
-        if (m_f != nullptr)
-            m_f();
+        this->Invoke();
     }
     void Cancel() { m_f = nullptr; };
+    void Invoke() {
+        if (m_f != nullptr)
+            m_f();
+        m_f = nullptr;
+    }
 };
 
 #define R_TRY(res_expr)        \
@@ -168,7 +173,7 @@ Result Capture() {
 
     /* Make unique path. */
     u64 tick = armGetSystemTick();
-    std::snprintf(path_buffer, 0x20, "/Bitmaps/%ld.bmp", tick);
+    std::snprintf(path_buffer, FS_MAX_PATH, "/Bitmaps/%ld.bmp", tick);
 
     /* Create file. */
     R_TRY(fsFsCreateFile(&fs, path_buffer, FileSize, 0));
@@ -210,6 +215,14 @@ Result Capture() {
     }
 
     rm_guard.Cancel();
+    file_guard.Invoke();
+
+    /* I don't care if any of this fails. */
+    FsTimeStampRaw timestamp;
+    if (R_SUCCEEDED(fsFsGetFileTimeStampRaw(&fs, path_buffer, &timestamp))) {
+        std::snprintf(b_path_buffer, FS_MAX_PATH, "/Bitmaps/%ld.bmp", timestamp.created);
+        fsFsRenameFile(&fs, path_buffer, b_path_buffer);
+    }
 
     return 0;
 }
