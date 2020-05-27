@@ -1,11 +1,13 @@
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <switch.h>
 
 extern "C" {
 extern u32 __start__;
 
-u32 __nx_applet_type = AppletType_None;
+u32 __nx_applet_type     = AppletType_None;
+u32 __nx_fs_num_sessions = 1;
 
 void __libnx_initheap(void);
 void __appInit(void);
@@ -22,7 +24,7 @@ void __libnx_initheap(void) {
     extern char *fake_heap_end;
 
     fake_heap_start = nullptr;
-    fake_heap_end = nullptr;
+    fake_heap_end   = nullptr;
 }
 
 #define R_ABORT_UNLESS(res_expr)                 \
@@ -84,39 +86,39 @@ struct bmp_t {
     u64 rsvd2;
 } __attribute__((packed));
 
-constexpr const u32 InComponents = 4;
+constexpr const u32 InComponents  = 4;
 constexpr const u32 OutComponents = 3;
-constexpr const u32 Width = 1280;
-constexpr const u32 Height = 720;
+constexpr const u32 Width         = 1280;
+constexpr const u32 Height        = 720;
 
-constexpr const u32 InLineSize = Width * InComponents;
+constexpr const u32 InLineSize  = Width * InComponents;
 constexpr const u32 OutLineSize = Width * OutComponents;
 
-constexpr const u32 InSize = InLineSize * Height;
-constexpr const u32 OutSize = OutLineSize * Height;
+constexpr const u32 InSize   = InLineSize * Height;
+constexpr const u32 OutSize  = OutLineSize * Height;
 constexpr const u32 FileSize = OutSize + 0x36;
 
-constexpr const u64 divider = 10;
-constexpr const u32 InBufferSize = InLineSize * divider;
+constexpr const u64 divider       = 10;
+constexpr const u32 InBufferSize  = InLineSize * divider;
 constexpr const u32 OutBufferSize = OutLineSize * divider;
 
 static_assert((Height % divider) == 0);
 
 constexpr const bmp_t bmp = {
-    .magic = 0x4D42,
-    .size = FileSize,
-    .rsvd = 0,
+    .magic    = 0x4D42,
+    .size     = FileSize,
+    .rsvd     = 0,
     .data_off = 0x36,
     .hdr_size = 40,
-    .width = Width,
-    .height = Height,
-    .planes = 1,
+    .width    = Width,
+    .height   = Height,
+    .planes   = 1,
     .pxl_bits = 24,
-    .comp = 0,
+    .comp     = 0,
     .img_size = OutSize,
-    .res_h = 2834,
-    .res_v = 2834,
-    .rsvd2 = 0,
+    .res_h    = 2834,
+    .res_v    = 2834,
+    .rsvd2    = 0,
 };
 
 static u8 in_buffer[InBufferSize];
@@ -189,7 +191,7 @@ Result Capture() {
         /* Resample buffer bottom up. */
         for (int div_y = (divider - 1); div_y >= 0; div_y--) {
             u8 *out = out_buffer + (div_y * OutLineSize);
-            u8 *in = in_buffer + ((divider - div_y - 1) * InLineSize);
+            u8 *in  = in_buffer + ((divider - div_y - 1) * InLineSize);
 
             /* RGBX to RGB bitmap */
             for (u32 x = 0; x < Width; x++) {
@@ -213,7 +215,7 @@ Result Capture() {
     FsTimeStampRaw timestamp;
     if (R_SUCCEEDED(fsFsGetFileTimeStampRaw(&fs, path_buffer, &timestamp))) {
         time_t ts = timestamp.created;
-        tm *t = localtime(&ts);
+        tm *t     = localtime(&ts);
         std::snprintf(b_path_buffer, FS_MAX_PATH, "/Bitmaps/%d-%02d-%02d_%02d-%02d-%02d.bmp",
                       t->tm_year + 1900,
                       t->tm_mon + 1,
@@ -248,7 +250,7 @@ int main(int argc, char *argv[]) {
             if (!held) {
                 /* Capture screen in VI. */
                 if (R_SUCCEEDED(capsscOpenRawScreenShotReadStream(nullptr, nullptr, nullptr, ViLayerStack_Default, 100'000'000))) {
-                    held = true;
+                    held       = true;
                     start_tick = armGetSystemTick();
                 }
             } else if (start_tick != 0) {
@@ -257,7 +259,7 @@ int main(int argc, char *argv[]) {
                 /* Discard capture. */
                 capsscCloseRawScreenShotReadStream();
                 start_tick = 0;
-                held = false;
+                held       = false;
             } else {
                 held = false;
             }
