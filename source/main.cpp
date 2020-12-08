@@ -31,13 +31,13 @@ void __libnx_initheap(void) {
     ({                                           \
         const auto _tmp_r_abort_rc = (res_expr); \
         if (R_FAILED(_tmp_r_abort_rc)) {         \
-            fatalThrow(_tmp_r_abort_rc);         \
+            diagAbortWithResult(_tmp_r_abort_rc);\
         }                                        \
     })
 
 bool initialized = false;
 
-void __attribute__((weak)) __appInit(void) {
+void __appInit(void) {
     while ((armGetSystemTick() / armGetSystemTickFreq()) < 10)
         svcSleepThread(1'000'000'000);
 
@@ -61,7 +61,7 @@ void __attribute__((weak)) __appInit(void) {
     smExit();
 }
 
-void __attribute__((weak)) __appExit(void) {
+void __appExit(void) {
     if (initialized) {
         fsExit();
         capsscExit();
@@ -240,7 +240,7 @@ int main(int argc, char *argv[]) {
 
     /* Obtain capture button event. */
     Event event;
-    R_ABORT_UNLESS(hidsysAcquireCaptureButtonEventHandle(&event));
+    R_ABORT_UNLESS(hidsysAcquireCaptureButtonEventHandle(&event, false));
     eventClear(&event);
 
     /* Loop forever. */
@@ -266,7 +266,7 @@ int main(int argc, char *argv[]) {
         } else {
             if (start_tick != 0) {
                 /* If held for more than half a second we discard the capture. */
-                if ((armGetSystemTick() - start_tick) >= (armGetSystemTickFreq() / 2)) {
+                if (armTicksToNs(armGetSystemTick() - start_tick) > 500'000'000) {
                     capsscCloseRawScreenShotReadStream();
                     start_tick = 0;
                 }
