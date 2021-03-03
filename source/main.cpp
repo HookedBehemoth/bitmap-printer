@@ -1,4 +1,3 @@
-#include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <switch.h>
@@ -17,6 +16,8 @@ void __appExit(void);
 alignas(16) u8 __nx_exception_stack[0x1000];
 u64 __nx_exception_stack_size = sizeof(__nx_exception_stack);
 void __libnx_exception_handler(ThreadExceptionDump *ctx);
+
+void s_printf(char *out_buf, const char *fmt, ...);
 }
 
 void __libnx_initheap(void) {
@@ -167,7 +168,7 @@ Result Capture() {
 
     /* Make unique path. */
     u64 tick = armGetSystemTick();
-    std::snprintf(path_buffer, FS_MAX_PATH, "/Bitmaps/%ld.bmp", tick);
+    s_printf(path_buffer, "/Bitmaps/%ld.bmp", tick);
 
     /* Create file. */
     R_TRY(fsFsCreateFile(&fs, path_buffer, FileSize, 0));
@@ -216,7 +217,7 @@ Result Capture() {
     if (R_SUCCEEDED(fsFsGetFileTimeStampRaw(&fs, path_buffer, &timestamp))) {
         time_t ts = timestamp.created;
         tm *t     = localtime(&ts);
-        std::snprintf(b_path_buffer, FS_MAX_PATH, "/Bitmaps/%d-%02d-%02d_%02d-%02d-%02d.bmp",
+        s_printf(b_path_buffer, "/Bitmaps/%d-%02d-%02d_%02d-%02d-%02d.bmp",
                       t->tm_year + 1900,
                       t->tm_mon + 1,
                       t->tm_mday,
