@@ -269,6 +269,7 @@ int main(int argc, char *argv[]) {
                 if (armTicksToNs(armGetSystemTick() - start_tick) > 500'000'000) {
                     capsscCloseRawScreenShotReadStream();
                     start_tick = 0;
+                    held       = false;
                 }
             }
         }
