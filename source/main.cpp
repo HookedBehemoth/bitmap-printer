@@ -216,7 +216,7 @@ Result Capture() {
     FsTimeStampRaw timestamp;
     if (R_SUCCEEDED(fsFsGetFileTimeStampRaw(&fs, path_buffer, &timestamp))) {
         time_t ts = timestamp.created;
-        tm *t     = localtime(&ts);
+        tm *t     = gmtime(&ts);
         s_printf(b_path_buffer, "/Bitmaps/%d-%02d-%02d_%02d-%02d-%02d.bmp",
                       t->tm_year + 1900,
                       t->tm_mon + 1,
