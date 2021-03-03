@@ -1,25 +1,41 @@
 #include <cstring>
 #include <ctime>
 #include <switch.h>
+#include "scope_guard.hpp"
+#include "internal.h"
 
 extern "C" {
-extern u32 __start__;
+extern u8 __tls_start[];
 
 u32 __nx_applet_type     = AppletType_None;
 u32 __nx_fs_num_sessions = 1;
 
 void __libnx_initheap(void);
 void __appInit(void);
-void __appExit(void);
+void __appExit(void) {}
+void __libnx_init(void* ctx, Handle main_thread, void* saved_lr);
+void __libnx_exit(int rc) {}
 
 /* Exception handling. */
-alignas(16) u8 __nx_exception_stack[0x1000];
+alignas(16) u8 __nx_exception_stack[0];
 u64 __nx_exception_stack_size = sizeof(__nx_exception_stack);
-void __libnx_exception_handler(ThreadExceptionDump *ctx);
 
 void s_printf(char *out_buf, const char *fmt, ...);
 }
 
+void __libnx_init(void* ctx, Handle main_thread, void* saved_lr) {
+    envSetup(NULL, main_thread, NULL);
+
+    // Initialize thread vars for the main thread
+    ThreadVars* tv = getThreadVars();
+    tv->magic      = THREADVARS_MAGIC;
+    tv->thread_ptr = NULL;
+    tv->reent      = _impure_ptr;
+    tv->tls_tp     = __tls_start-2*sizeof(void*); // subtract size of Thread Control Block (TCB)
+    tv->handle     = envGetMainThreadHandle();
+
+    __appInit();
+}
 void __libnx_initheap(void) {
     extern char *fake_heap_start;
     extern char *fake_heap_end;
@@ -36,8 +52,6 @@ void __libnx_initheap(void) {
         }                                        \
     })
 
-bool initialized = false;
-
 void __appInit(void) {
     while ((armGetSystemTick() / armGetSystemTickFreq()) < 10)
         svcSleepThread(1'000'000'000);
@@ -52,22 +66,14 @@ void __appInit(void) {
             setsysExit();
         }
 
-        if (hosversionAtLeast(3, 0, 0)) {
-            R_ABORT_UNLESS(hidsysInitialize());
-            R_ABORT_UNLESS(capsscInitialize());
-            R_ABORT_UNLESS(fsInitialize());
-            initialized = true;
-        }
+        if (hosversionBefore(3, 0, 0))
+            svcExitProcess();
+
+        R_ABORT_UNLESS(hidsysInitialize());
+        R_ABORT_UNLESS(capsscInitialize());
+        R_ABORT_UNLESS(fsInitialize());
     }
     smExit();
-}
-
-void __appExit(void) {
-    if (initialized) {
-        fsExit();
-        capsscExit();
-        hidsysExit();
-    }
 }
 
 struct bmp_t {
@@ -127,23 +133,6 @@ static u8 out_buffer[OutBufferSize];
 
 char path_buffer[FS_MAX_PATH];
 char b_path_buffer[FS_MAX_PATH];
-
-#include <functional>
-class ScopeGuard {
-    std::function<void()> m_f;
-
-  public:
-    ScopeGuard(std::function<void()> f) : m_f(f) {}
-    ~ScopeGuard() {
-        this->Invoke();
-    }
-    void Cancel() { m_f = nullptr; };
-    void Invoke() {
-        if (m_f != nullptr)
-            m_f();
-        m_f = nullptr;
-    }
-};
 
 #define R_TRY(res_expr)        \
     ({                         \
@@ -231,10 +220,6 @@ Result Capture() {
 }
 
 int main(int argc, char *argv[]) {
-    /* Quietly exit on unsupported versions. */
-    if (!initialized)
-        return 0;
-
     bool held = false;
 
     u64 start_tick = 0;
@@ -276,8 +261,5 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    /* Close button event. */
-    eventClose(&event);
-
-    return 0;
+    /* Unreachable lol */
 }
