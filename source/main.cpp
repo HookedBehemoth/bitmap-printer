@@ -7,41 +7,16 @@
 extern "C" {
 extern u8 __tls_start[];
 
-u32 __nx_applet_type     = AppletType_None;
 u32 __nx_fs_num_sessions = 1;
 
-void __libnx_initheap(void);
-void __appInit(void);
-void __appExit(void) {}
-void __libnx_init(void* ctx, Handle main_thread, void* saved_lr);
-void __libnx_exit(int rc) {}
+void __libnx_init(void*, Handle, void*);
+void __libnx_exit(int) {}
 
 /* Exception handling. */
 alignas(16) u8 __nx_exception_stack[0];
 u64 __nx_exception_stack_size = sizeof(__nx_exception_stack);
 
 void s_printf(char *out_buf, const char *fmt, ...);
-}
-
-void __libnx_init(void* ctx, Handle main_thread, void* saved_lr) {
-    envSetup(NULL, main_thread, NULL);
-
-    // Initialize thread vars for the main thread
-    ThreadVars* tv = getThreadVars();
-    tv->magic      = THREADVARS_MAGIC;
-    tv->thread_ptr = NULL;
-    tv->reent      = _impure_ptr;
-    tv->tls_tp     = __tls_start-2*sizeof(void*); // subtract size of Thread Control Block (TCB)
-    tv->handle     = envGetMainThreadHandle();
-
-    __appInit();
-}
-void __libnx_initheap(void) {
-    extern char *fake_heap_start;
-    extern char *fake_heap_end;
-
-    fake_heap_start = nullptr;
-    fake_heap_end   = nullptr;
 }
 
 #define R_ABORT_UNLESS(res_expr)                 \
@@ -52,7 +27,15 @@ void __libnx_initheap(void) {
         }                                        \
     })
 
-void __appInit(void) {
+void __libnx_init(void*, Handle main_thread, void*) {
+    // Initialize thread vars for the main thread
+    ThreadVars* tv = getThreadVars();
+    tv->magic      = THREADVARS_MAGIC;
+    tv->thread_ptr = NULL;
+    tv->reent      = _impure_ptr;
+    tv->tls_tp     = __tls_start-2*sizeof(void*); // subtract size of Thread Control Block (TCB)
+    tv->handle     = main_thread;
+
     while ((armGetSystemTick() / armGetSystemTickFreq()) < 10)
         svcSleepThread(1'000'000'000);
 
@@ -205,7 +188,8 @@ Result Capture() {
     FsTimeStampRaw timestamp;
     if (R_SUCCEEDED(fsFsGetFileTimeStampRaw(&fs, path_buffer, &timestamp))) {
         time_t ts = timestamp.created;
-        tm *t     = gmtime(&ts);
+        tm _t;
+        tm *t = gmtime_r(&ts, &_t);
         s_printf(b_path_buffer, "/Bitmaps/%d-%02d-%02d_%02d-%02d-%02d.bmp",
                       t->tm_year + 1900,
                       t->tm_mon + 1,
@@ -219,7 +203,7 @@ Result Capture() {
     return 0;
 }
 
-int main(int argc, char *argv[]) {
+int main() {
     bool held = false;
 
     u64 start_tick = 0;
