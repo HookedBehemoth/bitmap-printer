@@ -1,14 +1,13 @@
 # bitmap-printer
-
 "Bitmap printer goes brrrrr"
 
 ## What does this do?
-This system module captures the capture button event and instead of saving a compressed (jpeg) image, it stores an uncompressed RGB bitmap on the sd card.
+This system module captures the capture button event and instead of saving a compressed (jpeg) image, it stores an uncompressed RGB bitmap on the microSD card.
 
 ## Why does it need patches?
 The IPC calls I use are caps:sc 1201-1203 that check a flag for debug mode. The patch makes the function call always return true.
 
-Works on HOS version 3.0.0-11.0.1 (12.12.2020).
+Works on HOS versions 3.0.0-13.1.0 (10.26.2021).
 
 Included patches:
 | vi Version | Patch name (Build ID + .ips) | tested |
@@ -27,5 +26,8 @@ Included patches:
 | 10.0.0.300 | 96529C3226BEE906EE651754C33FE3E24ECAE832.ips | yes |
 | 11.0.0.400 | D689E9FAE7CAA4EC30B0CD9B419779F73ED3F88B.ips | yes |
 | 11.0.1.20 | 65A23B52FCF971400CAA4198656D73867D7F1F1D.ips | yes |
+| 12.0.0.2500 | B295D3A8F8ACF88CB0C5CE7C0488CC5511B9C389.ips | yes |
+| 12.1.0.120 | B295D3A8F8ACF88CB0C5CE7C0488CC5511B9C389.ips | yes |
+| 13.0.0.220 | 82EE58BEAB54C1A9D4B3D9ED414E84E31502FAC6.ips | yes |
 
 Please post on the [issue thread](https://github.com/HookedBehemoth/bitmap-printer/issues/1) if your experience differs from the table above or if you tested an undocumented version.
