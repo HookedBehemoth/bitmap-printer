@@ -3,6 +3,7 @@
 #include <switch.h>
 #include "scope_guard.hpp"
 #include "internal.h"
+#include <arm_neon.h>
 
 extern "C" {
 extern u8 __tls_start[];
@@ -111,7 +112,9 @@ constexpr const bmp_t bmp = {
     .rsvd2    = 0,
 };
 
+[[gnu::aligned(0x40)]]
 static u8 in_buffer[InBufferSize];
+[[gnu::aligned(0x40)]]
 static u8 out_buffer[OutBufferSize];
 
 char path_buffer[FS_MAX_PATH];
@@ -139,8 +142,7 @@ Result Capture() {
         return rc;
 
     /* Make unique path. */
-    u64 tick = armGetSystemTick();
-    s_printf(path_buffer, "/Bitmaps/%ld.bmp", tick);
+    std::strcpy(path_buffer, "/Bitmaps/tmp.bmp");
 
     /* Create file. */
     R_TRY(fsFsCreateFile(&fs, path_buffer, FileSize, 0));
@@ -166,13 +168,11 @@ Result Capture() {
             u8 *out = out_buffer + (div_y * OutLineSize);
             u8 *in  = in_buffer + ((divider - div_y - 1) * InLineSize);
 
-            /* RGBX to RGB bitmap */
-            for (u32 x = 0; x < Width; x++) {
-                out[0] = in[2];
-                out[1] = in[1];
-                out[2] = in[0];
-                in += 4;
-                out += 3;
+            /* BGRX to RGB bitmap */
+            for (u32 x = 0; x < Width; x += 16, in += 16 * InComponents, out += 16 * OutComponents) {
+                uint8x16x4_t bgra = vld4q_u8(in);
+                uint8x16x3_t rgb = { bgra.val[2], bgra.val[1], bgra.val[0] };
+                vst3q_u8(out, rgb);
             }
         }
 
