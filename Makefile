@@ -122,6 +122,7 @@ $(BUILD):
 	cp toolbox.json dist/atmosphere/contents/4200000000000811/toolbox.json
 	cp bitmap-printer.nsp dist/atmosphere/contents/4200000000000811/exefs.nsp
 	cd dist; zip -r bitmap-printer.zip ./*; cd ../;
+	hactool -t nso bitmap-printer.nso
 
 #---------------------------------------------------------------------------------
 clean:
