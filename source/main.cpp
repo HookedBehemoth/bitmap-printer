@@ -5,6 +5,11 @@
 #include "internal.h"
 #include <arm_neon.h>
 
+#if !BITMAP
+#define QOI_IMPLEMENTATION
+#include "qoi.h"
+#endif
+
 extern "C" {
 extern u8 __tls_start[];
 
@@ -60,23 +65,6 @@ void __libnx_init(void*, Handle main_thread, void*) {
     smExit();
 }
 
-struct bmp_t {
-    u16 magic;
-    u32 size;
-    u32 rsvd;
-    u32 data_off;
-    u32 hdr_size;
-    u32 width;
-    u32 height;
-    u16 planes;
-    u16 pxl_bits;
-    u32 comp;
-    u32 img_size;
-    u32 res_h;
-    u32 res_v;
-    u64 rsvd2;
-} __attribute__((packed));
-
 constexpr const u32 InComponents  = 4;
 constexpr const u32 OutComponents = 3;
 constexpr const u32 Width         = 1280;
@@ -95,6 +83,24 @@ constexpr const u32 OutBufferSize = OutLineSize * divider;
 
 static_assert((Height % divider) == 0);
 
+#if BITMAP
+struct bmp_t {
+    u16 magic;
+    u32 size;
+    u32 rsvd;
+    u32 data_off;
+    u32 hdr_size;
+    u32 width;
+    u32 height;
+    u16 planes;
+    u16 pxl_bits;
+    u32 comp;
+    u32 img_size;
+    u32 res_h;
+    u32 res_v;
+    u64 rsvd2;
+} __attribute__((packed));
+
 constexpr const bmp_t bmp = {
     .magic    = 0x4D42,
     .size     = FileSize,
@@ -111,6 +117,7 @@ constexpr const bmp_t bmp = {
     .res_v    = 2834,
     .rsvd2    = 0,
 };
+#endif
 
 [[gnu::aligned(0x40)]]
 static u8 in_buffer[InBufferSize];
@@ -134,7 +141,11 @@ Result Capture() {
     ScopeGuard fs_guard([&fs] { fsFsClose(&fs); });
 
     /* Create bitmap directory. */
+#if BITMAP
     std::strcpy(path_buffer, "/Bitmaps/");
+#else
+    std::strcpy(path_buffer, "/QOI/");
+#endif
     Result rc = fsFsCreateDirectory(&fs, path_buffer);
 
     /* Path already exists. */
@@ -142,7 +153,11 @@ Result Capture() {
         return rc;
 
     /* Make unique path. */
+#if BITMAP
     std::strcpy(path_buffer, "/Bitmaps/tmp.bmp");
+#else
+    std::strcpy(path_buffer, "/QOI/tmp.qoi");
+#endif
 
     /* Create file. */
     R_TRY(fsFsCreateFile(&fs, path_buffer, FileSize, 0));
@@ -153,16 +168,48 @@ Result Capture() {
     R_TRY(fsFsOpenFile(&fs, path_buffer, FsOpenMode_Write, &file));
     ScopeGuard file_guard([&file] { fsFileClose(&file); });
 
-    /* Write bitmap header. */
     off_t offset = 0;
+#if BITMAP
+    /* Write bitmap header. */
     fsFileWrite(&file, 0, &bmp, 54, FsWriteOption_None);
     offset += 54;
+#else
+    /* Write QOI header */
+    constexpr qoi_desc desc = {
+        .width = 1280,
+        .height = 720,
+        .channels = 4,
+        .colorspace = QOI_SRGB,
+    };
+    unsigned char buffer[0x10];
+    qoi_write_header(buffer, &desc);
+    fsFileWrite(&file, 0, &buffer, 0xE, FsWriteOption_None);
+    offset += 0xE;
+
+    int run;
+	qoi_rgba_t index[64];
+	qoi_rgba_t px, px_prev;
+
+	QOI_ZEROARR(index);
+
+	run = 0;
+	px_prev.rgba.r = 0;
+	px_prev.rgba.g = 0;
+	px_prev.rgba.b = 0;
+	px_prev.rgba.a = 255;
+	px = px_prev;
+#endif
 
     u64 written = 0;
+#if BITMAP
     for (int y = (Height / divider) - 1; y >= 0; y--) {
+#else
+    for (unsigned int y = 0; y < (Height / divider); y++) {
+#endif
         /* Read raw image data */
         R_TRY(capsscReadRawScreenShotReadStream(&written, in_buffer, sizeof(in_buffer), y * sizeof(in_buffer)));
 
+#if BITMAP
         /* Resample buffer bottom up. */
         for (int div_y = (divider - 1); div_y >= 0; div_y--) {
             u8 *out = out_buffer + (div_y * OutLineSize);
@@ -175,11 +222,22 @@ Result Capture() {
                 vst3q_u8(out, rgb);
             }
         }
+        const u64 size = sizeof(out_buffer);
+#else
+        const u64 size = qoi_write_chunk(out_buffer, in_buffer, sizeof(in_buffer), &desc, index, &px, &px_prev, &run);
+#endif
 
         /* Write to file. */
-        R_TRY(fsFileWrite(&file, offset, out_buffer, sizeof(out_buffer), FsWriteOption_None));
-        offset += sizeof(out_buffer);
+        R_TRY(fsFileWrite(&file, offset, out_buffer, size, FsWriteOption_None));
+        offset += size;
     }
+
+#if !BITMAP
+    /* Write QOI end marker */
+    qoi_write_end(buffer);
+    R_TRY(fsFileWrite(&file, offset, buffer, 0x8, FsWriteOption_None));
+    R_TRY(fsFileSetSize(&file, offset + 0x8));
+#endif
 
     rm_guard.Cancel();
     file_guard.Invoke();
@@ -190,7 +248,11 @@ Result Capture() {
         time_t ts = timestamp.created;
         tm _t;
         tm *t = gmtime_r(&ts, &_t);
+#if BITMAP
         s_printf(b_path_buffer, "/Bitmaps/%d-%02d-%02d_%02d-%02d-%02d.bmp",
+#else
+        s_printf(b_path_buffer, "/QOI/%d-%02d-%02d_%02d-%02d-%02d.qoi",
+#endif
                       t->tm_year + 1900,
                       t->tm_mon + 1,
                       t->tm_mday,
