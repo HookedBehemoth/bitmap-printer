@@ -7,7 +7,7 @@ This system module captures the capture button event and instead of saving a com
 ## Why does it need patches?
 The IPC calls I use are caps:sc 1201-1203 that check a flag for debug mode. The patch makes the function call always return true.
 
-Works on HOS versions 3.0.0-15.0.0 (2022.10.13).
+Works on HOS versions 3.0.0-16.0.0 (2023.02.20).
 
 Included patches:
 | vi Version | Patch name (Build ID + .ips) | tested |
@@ -31,5 +31,6 @@ Included patches:
 | 13.0.0.220 | 82EE58BEAB54C1A9D4B3D9ED414E84E31502FAC6.ips | yes |
 | 14.0.0.1240 | AFEAACF3E88AB539574689D1458060657E81E088.ips | yes |
 | 15.0.0.1120 | 7E9BB552AAEFF82363D1E8C97B5C6B95E3989E1A.ips | yes |
+| 16.0.0.1040 | BA15B407573B8CECF0FAE2B367D3103A2A1E821C.ips | yes |
 
 Please post on the [issue thread](https://github.com/HookedBehemoth/bitmap-printer/issues/1) if your experience differs from the table above or if you tested an undocumented version.
