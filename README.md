@@ -34,5 +34,6 @@ Included patches:
 | 16.0.0.1040 | BA15B407573B8CECF0FAE2B367D3103A2A1E821C.ips | yes |
 | 17.0.0.960 | 34D15383767E313EE76F1EE991CD00AD2BF8C62A.ips | yes |
 | 18.0.0.1060 | 9D8D6EFEE01E97E95E00D573530C09CB5AB5B8A0.ips | yes |
+| 19.0.0.1080 | D94508595598713DD2C3390BD0518C9A748D273F.ips | no |
 
 Please post on the [issue thread](https://github.com/HookedBehemoth/bitmap-printer/issues/1) if your experience differs from the table above or if you tested an undocumented version.
