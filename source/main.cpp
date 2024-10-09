@@ -34,7 +34,7 @@ void __libnx_init(void*, Handle main_thread, void*) {
     tv->magic      = THREADVARS_MAGIC;
     tv->thread_ptr = NULL;
     tv->reent      = _impure_ptr;
-    tv->tls_tp     = __tls_start-2*sizeof(void*); // subtract size of Thread Control Block (TCB)
+    tv->tls_tp     = (void*)((uintptr_t)__tls_start-2*sizeof(void*)); // subtract size of Thread Control Block (TCB)
     tv->handle     = main_thread;
 
     while ((armGetSystemTick() / armGetSystemTickFreq()) < 10)
